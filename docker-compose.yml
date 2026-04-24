@@ -42,10 +42,10 @@ services:
     # Use image default CMD (./bin/docker-server) which runs migrations then starts gunicorn
     labels:
       - traefik.enable=true
-      - traefik.http.routers.posthog-http.rule=Host(`${POSTHOG_DOMAIN}`)
+      - traefik.http.routers.posthog-http.rule=Host(`analytics.astrocircle.co`)
       - traefik.http.routers.posthog-http.entrypoints=http
       - traefik.http.routers.posthog-http.service=posthog
-      - traefik.http.routers.posthog.rule=Host(`${POSTHOG_DOMAIN}`)
+      - traefik.http.routers.posthog.rule=Host(`analytics.astrocircle.co`)
       - traefik.http.routers.posthog.entrypoints=https
       - traefik.http.routers.posthog.tls=true
       - traefik.http.routers.posthog.tls.certresolver=letsencrypt
