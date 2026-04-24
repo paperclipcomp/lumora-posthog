@@ -1,0 +1,174 @@
+version: "3.8"
+
+# PostHog self-hosted for Astro Circle (Lumora)
+# Privacy-compliant: GDPR/CCPA/CPRA
+# Traefik-native (Coolify-compatible): Caddy replaced with Traefik labels
+
+x-posthog-defaults: &posthog-defaults
+  image: posthog/posthog:$POSTHOG_APP_TAG
+  environment:
+    SECRET_KEY: $POSTHOG_SECRET
+    DATABASE_URL: postgres://posthog:${POSTGRES_PASSWORD}@posthog-db/posthog
+    REDIS_URL: redis://posthog-redis:6379/
+    CLICKHOUSE_HOST: posthog-clickhouse
+    CLICKHOUSE_DATABASE: posthog
+    CLICKHOUSE_CLUSTER: posthog
+    CLICKHOUSE_SECURE: "false"
+    CLICKHOUSE_VERIFY: "false"
+    KAFKA_HOSTS: posthog-kafka:9092
+    SITE_URL: https://$POSTHOG_DOMAIN
+    # Privacy-compliance
+    DISABLE_SECURE_SSL_REDIRECT: "1"
+    IS_BEHIND_PROXY: "1"
+    TRUST_ALL_PROXIES: "1"
+    OPT_OUT_CAPTURE: "1"
+    ANONYMIZE_IP: "true"
+  depends_on:
+    posthog-db:
+      condition: service_healthy
+    posthog-redis:
+      condition: service_healthy
+    posthog-clickhouse:
+      condition: service_healthy
+    posthog-kafka:
+      condition: service_started
+  restart: unless-stopped
+
+services:
+  posthog-web:
+    <<: *posthog-defaults
+    command: gunicorn -w 4 --threads 2 -b 0.0.0.0:8000 --max-requests 1000 --max-requests-jitter 50 --log-level=warning posthog.wsgi
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.posthog.rule=Host(`${POSTHOG_DOMAIN}`)
+      - traefik.http.routers.posthog.entrypoints=https
+      - traefik.http.routers.posthog.tls=true
+      - traefik.http.routers.posthog.tls.certresolver=letsencrypt
+      - traefik.http.services.posthog.loadbalancer.server.port=8000
+      - traefik.docker.network=coolify
+    networks:
+      - coolify
+      - posthog-internal
+
+  posthog-worker:
+    <<: *posthog-defaults
+    command: python -m celery -A posthog worker -c 4 --loglevel=warning -Q celery,webhooks,scheduled_tasks
+    networks:
+      - posthog-internal
+
+  posthog-plugin-server:
+    image: posthog/posthog:$POSTHOG_NODE_TAG
+    command: ./bin/plugin-server --no-restart-loop
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://posthog:${POSTGRES_PASSWORD}@posthog-db/posthog
+      KAFKA_HOSTS: posthog-kafka:9092
+      REDIS_URL: redis://posthog-redis:6379/
+      CLICKHOUSE_HOST: posthog-clickhouse
+      CLICKHOUSE_DATABASE: posthog
+      WORKER_CONCURRENCY: "4"
+    depends_on:
+      posthog-db:
+        condition: service_healthy
+      posthog-redis:
+        condition: service_healthy
+      posthog-clickhouse:
+        condition: service_healthy
+      posthog-kafka:
+        condition: service_started
+    networks:
+      - posthog-internal
+
+  posthog-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: posthog
+      POSTGRES_PASSWORD: $POSTGRES_PASSWORD
+      POSTGRES_DB: posthog
+    volumes:
+      - posthog-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U posthog"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - posthog-internal
+
+  posthog-redis:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - posthog-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - posthog-internal
+
+  posthog-clickhouse:
+    image: clickhouse/clickhouse-server:24.8.3.32
+    depends_on:
+      - posthog-zookeeper
+    environment:
+      CLICKHOUSE_DB: posthog
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: ""
+    volumes:
+      - posthog-clickhouse-data:/var/lib/clickhouse
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "localhost:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - posthog-internal
+
+  posthog-zookeeper:
+    image: zookeeper:3.7.2
+    volumes:
+      - posthog-zookeeper-data:/data
+      - posthog-zookeeper-log:/datalog
+    restart: unless-stopped
+    networks:
+      - posthog-internal
+
+  posthog-kafka:
+    image: bitnami/kafka:2.8.1
+    depends_on:
+      - posthog-zookeeper
+    environment:
+      KAFKA_BROKER_ID: "1001"
+      KAFKA_CFG_ZOOKEEPER_CONNECT: posthog-zookeeper:2181
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://posthog-kafka:9092
+      KAFKA_CFG_LOG_RETENTION_HOURS: "168"
+    volumes:
+      - posthog-kafka-data:/bitnami/kafka
+    restart: unless-stopped
+    networks:
+      - posthog-internal
+
+volumes:
+  posthog-db-data:
+  posthog-redis-data:
+  posthog-clickhouse-data:
+  posthog-zookeeper-data:
+  posthog-zookeeper-log:
+  posthog-kafka-data:
+
+networks:
+  coolify:
+    external: true
+  posthog-internal:
+    driver: bridge
