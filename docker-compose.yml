@@ -111,7 +111,7 @@ services:
       - posthog-internal
 
   posthog-clickhouse:
-    image: clickhouse/clickhouse-server:24.8.3.32
+    image: clickhouse/clickhouse-server:24.8
     depends_on:
       - posthog-zookeeper
     environment:
