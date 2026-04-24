@@ -13,8 +13,7 @@ x-posthog-defaults: &posthog-defaults
     REDIS_URL: redis://posthog-redis:6379/
     CLICKHOUSE_HOST: posthog-clickhouse
     CLICKHOUSE_DATABASE: posthog
-    CLICKHOUSE_CLUSTER: ""
-    CLICKHOUSE_REPLICATION: "false"
+    CLICKHOUSE_CLUSTER: posthog
     CLICKHOUSE_SECURE: "false"
     CLICKHOUSE_VERIFY: "false"
     KAFKA_HOSTS: posthog-kafka:9092
@@ -34,8 +33,6 @@ x-posthog-defaults: &posthog-defaults
       condition: service_healthy
     posthog-kafka:
       condition: service_started
-    posthog-clickhouse-init:
-      condition: service_completed_successfully
   restart: unless-stopped
 
 services:
@@ -88,26 +85,6 @@ services:
     networks:
       - posthog-internal
 
-  # Init container: creates infi_clickhouse_orm_migrations table for non-replicated mode.
-  # PostHog's migrate_clickhouse.py calls _get_applied_migrations directly (no auto-create)
-  # when CLICKHOUSE_REPLICATION=false, so this table must pre-exist.
-  posthog-clickhouse-init:
-    image: clickhouse/clickhouse-server:24.3
-    entrypoint: /bin/sh
-    command:
-      - -c
-      - >-
-        clickhouse-client --host posthog-clickhouse --user default
-        --query "CREATE TABLE IF NOT EXISTS posthog.infi_clickhouse_orm_migrations
-        (package_name String, module_name String, applied Date DEFAULT '1970-01-01')
-        ENGINE = MergeTree() ORDER BY (package_name, module_name)"
-    depends_on:
-      posthog-clickhouse:
-        condition: service_healthy
-    networks:
-      - posthog-internal
-    restart: "no"
-
   posthog-db:
     image: postgres:15-alpine
     environment:
@@ -143,6 +120,7 @@ services:
     image: clickhouse/clickhouse-server:24.3
     volumes:
       - posthog-clickhouse-data:/var/lib/clickhouse
+      - ./clickhouse-config/cluster.xml:/etc/clickhouse-server/config.d/cluster.xml:ro
     environment:
       CLICKHOUSE_DB: posthog
       CLICKHOUSE_USER: default
