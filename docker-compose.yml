@@ -14,6 +14,7 @@ x-posthog-defaults: &posthog-defaults
     CLICKHOUSE_HOST: posthog-clickhouse
     CLICKHOUSE_DATABASE: posthog
     CLICKHOUSE_CLUSTER: ""
+    CLICKHOUSE_REPLICATION: "false"
     CLICKHOUSE_SECURE: "false"
     CLICKHOUSE_VERIFY: "false"
     KAFKA_HOSTS: posthog-kafka:9092
