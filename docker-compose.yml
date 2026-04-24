@@ -143,7 +143,7 @@ services:
       - posthog-internal
 
   posthog-kafka:
-    image: bitnami/kafka:2.8.1
+    image: bitnami/kafka:3.4
     depends_on:
       - posthog-zookeeper
     environment:
@@ -153,6 +153,8 @@ services:
       KAFKA_CFG_LISTENERS: PLAINTEXT://:9092
       KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://posthog-kafka:9092
       KAFKA_CFG_LOG_RETENTION_HOURS: "168"
+      # Kafka 3.x with ZooKeeper mode
+      KAFKA_CFG_ZOOKEEPER_SESSION_TIMEOUT_MS: "6000"
     volumes:
       - posthog-kafka-data:/bitnami/kafka
     restart: unless-stopped
