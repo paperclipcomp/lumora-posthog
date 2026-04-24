@@ -112,7 +112,7 @@ services:
       - posthog-internal
 
   posthog-clickhouse:
-    image: clickhouse/clickhouse-server:23.12-alpine
+    image: clickhouse/clickhouse-server:24.3
     volumes:
       - posthog-clickhouse-data:/var/lib/clickhouse
     environment:
@@ -124,10 +124,11 @@ services:
         soft: 262144
         hard: 262144
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "localhost:8123/ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
+      test: ["CMD-SHELL", "clickhouse-client --query='SELECT 1' || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 15
+      start_period: 60s
     restart: unless-stopped
     networks:
       - posthog-internal
