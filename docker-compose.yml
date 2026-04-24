@@ -3,6 +3,7 @@ version: "3.8"
 # PostHog self-hosted for Astro Circle (Lumora)
 # Privacy-compliant: GDPR/CCPA/CPRA
 # Traefik-native (Coolify-compatible): Caddy replaced with Traefik labels
+# Uses Redpanda (Kafka-compatible) + ClickHouse for event streaming
 
 x-posthog-defaults: &posthog-defaults
   image: posthog/posthog:$POSTHOG_APP_TAG
@@ -111,15 +112,13 @@ services:
       - posthog-internal
 
   posthog-clickhouse:
-    image: clickhouse/clickhouse-server:24.8
-    depends_on:
-      - posthog-zookeeper
+    image: clickhouse/clickhouse-server:23.12-alpine
+    volumes:
+      - posthog-clickhouse-data:/var/lib/clickhouse
     environment:
       CLICKHOUSE_DB: posthog
       CLICKHOUSE_USER: default
       CLICKHOUSE_PASSWORD: ""
-    volumes:
-      - posthog-clickhouse-data:/var/lib/clickhouse
     ulimits:
       nofile:
         soft: 262144
@@ -133,30 +132,20 @@ services:
     networks:
       - posthog-internal
 
-  posthog-zookeeper:
-    image: zookeeper:3.7.2
-    volumes:
-      - posthog-zookeeper-data:/data
-      - posthog-zookeeper-log:/datalog
-    restart: unless-stopped
-    networks:
-      - posthog-internal
-
+  # Redpanda: Kafka-compatible message broker (lighter than Kafka+ZooKeeper)
   posthog-kafka:
-    image: bitnami/kafka:3.4
-    depends_on:
-      - posthog-zookeeper
-    environment:
-      KAFKA_BROKER_ID: "1001"
-      KAFKA_CFG_ZOOKEEPER_CONNECT: posthog-zookeeper:2181
-      ALLOW_PLAINTEXT_LISTENER: "yes"
-      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092
-      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://posthog-kafka:9092
-      KAFKA_CFG_LOG_RETENTION_HOURS: "168"
-      # Kafka 3.x with ZooKeeper mode
-      KAFKA_CFG_ZOOKEEPER_SESSION_TIMEOUT_MS: "6000"
+    image: docker.redpanda.com/redpandadata/redpanda:v23.3.21
+    command:
+      - redpanda start
+      - --advertise-kafka-addr=posthog-kafka:9092
+      - --overprovisioned
+      - --smp 1
+      - --memory 512M
+      - --reserve-memory 0M
+      - --node-id 0
+      - --check=false
     volumes:
-      - posthog-kafka-data:/bitnami/kafka
+      - posthog-kafka-data:/var/lib/redpanda/data
     restart: unless-stopped
     networks:
       - posthog-internal
@@ -165,8 +154,6 @@ volumes:
   posthog-db-data:
   posthog-redis-data:
   posthog-clickhouse-data:
-  posthog-zookeeper-data:
-  posthog-zookeeper-log:
   posthog-kafka-data:
 
 networks:
