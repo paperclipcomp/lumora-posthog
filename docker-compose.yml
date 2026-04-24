@@ -117,7 +117,7 @@ services:
       - posthog-internal
 
   posthog-clickhouse:
-    image: clickhouse/clickhouse-server:24.3
+    image: clickhouse/clickhouse-server:23.12
     volumes:
       - posthog-clickhouse-data:/var/lib/clickhouse
       - ./clickhouse-config/cluster.xml:/etc/clickhouse-server/config.d/cluster.xml:ro
