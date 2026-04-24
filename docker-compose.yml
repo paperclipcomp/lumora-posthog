@@ -67,7 +67,7 @@ services:
       REDIS_URL: redis://posthog-redis:6379/
       CLICKHOUSE_HOST: posthog-clickhouse
       CLICKHOUSE_DATABASE: posthog
-      CLICKHOUSE_PASSWORD: ""
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
       WORKER_CONCURRENCY: "4"
     depends_on:
       posthog-db:
@@ -119,7 +119,7 @@ services:
     environment:
       CLICKHOUSE_DB: posthog
       CLICKHOUSE_USER: default
-      CLICKHOUSE_PASSWORD: ""
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
     ulimits:
       nofile:
         soft: 262144
