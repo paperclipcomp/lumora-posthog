@@ -16,6 +16,8 @@ x-posthog-defaults: &posthog-defaults
     CLICKHOUSE_CLUSTER: posthog
     CLICKHOUSE_SECURE: "false"
     CLICKHOUSE_VERIFY: "false"
+    CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
+    CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
     KAFKA_HOSTS: posthog-kafka:9092
     KAFKA_URL: kafka://posthog-kafka:9092
     SITE_URL: https://$POSTHOG_DOMAIN
@@ -45,12 +47,18 @@ services:
       - traefik.http.routers.posthog-http.rule=Host(`analytics.astrocircle.co`)
       - traefik.http.routers.posthog-http.entrypoints=http
       - traefik.http.routers.posthog-http.service=posthog
+      - traefik.http.routers.posthog-http.middlewares=posthog-cors
       - traefik.http.routers.posthog.rule=Host(`analytics.astrocircle.co`)
       - traefik.http.routers.posthog.entrypoints=https
       - traefik.http.routers.posthog.tls=true
       - traefik.http.routers.posthog.tls.certresolver=letsencrypt
       - traefik.http.routers.posthog.service=posthog
+      - traefik.http.routers.posthog.middlewares=posthog-cors
       - traefik.http.services.posthog.loadbalancer.server.port=8000
+      - traefik.http.middlewares.posthog-cors.headers.accesscontrolalloworiginlist=https://astrocircle.co
+      - traefik.http.middlewares.posthog-cors.headers.accesscontrolallowmethods=GET,POST,PUT,OPTIONS
+      - traefik.http.middlewares.posthog-cors.headers.accesscontrolallowheaders=Content-Type,Authorization
+      - traefik.http.middlewares.posthog-cors.headers.accesscontrolmaxage=100
       - traefik.docker.network=coolify
     networks:
       - coolify
@@ -73,6 +81,7 @@ services:
       REDIS_URL: redis://posthog-redis:6379/
       CLICKHOUSE_HOST: posthog-clickhouse
       CLICKHOUSE_DATABASE: posthog
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
       WORKER_CONCURRENCY: "4"
     depends_on:
