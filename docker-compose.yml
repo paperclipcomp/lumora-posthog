@@ -130,7 +130,7 @@ services:
   posthog-clickhouse:
     image: clickhouse/clickhouse-server:22.8
     volumes:
-      - posthog-clickhouse-data:/var/lib/clickhouse
+      - posthog-clickhouse-data-v2:/var/lib/clickhouse
       - ./clickhouse-config/cluster.xml:/etc/clickhouse-server/config.d/cluster.xml:ro
       - ./clickhouse-config/default-password.xml:/etc/clickhouse-server/users.d/default-password.xml:ro
     environment:
@@ -172,7 +172,7 @@ services:
 volumes:
   posthog-db-data:
   posthog-redis-data:
-  posthog-clickhouse-data:
+  posthog-clickhouse-data-v2:
   posthog-kafka-data:
 
 networks:
